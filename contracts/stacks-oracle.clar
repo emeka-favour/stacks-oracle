@@ -256,3 +256,65 @@
     participant: participant,
   })
 )
+
+;; Get Protocol Treasury Balance
+;; Returns total STX held in protocol escrow
+(define-read-only (get-protocol-treasury)
+  (stx-get-balance (as-contract tx-sender))
+)
+
+;; Get Protocol Configuration
+;; Returns current protocol parameters for transparency
+(define-read-only (get-protocol-settings)
+  {
+    oracle-endpoint: (var-get price-oracle-endpoint),
+    minimum-stake: (var-get min-participation-threshold),
+    fee-rate: (var-get protocol-fee-rate),
+    total-markets: (var-get global-market-index),
+  }
+)
+
+;; ADMINISTRATIVE GOVERNANCE FUNCTIONS
+
+;; Update Oracle Endpoint
+;; Allows admin to modify the authorized price oracle address
+(define-public (update-oracle-endpoint (new-endpoint principal))
+  (begin
+    (asserts! (is-eq tx-sender PROTOCOL_ADMIN) ERR-UNAUTHORIZED-ACCESS)
+    (asserts! (is-eq new-endpoint new-endpoint) ERR-INVALID-INPUT)
+    (ok (var-set price-oracle-endpoint new-endpoint))
+  )
+)
+
+;; Adjust Minimum Stake Threshold
+;; Modifies the minimum STX required for market participation
+(define-public (adjust-min-stake (new-threshold uint))
+  (begin
+    (asserts! (is-eq tx-sender PROTOCOL_ADMIN) ERR-UNAUTHORIZED-ACCESS)
+    (asserts! (> new-threshold u0) ERR-INVALID-INPUT)
+    (ok (var-set min-participation-threshold new-threshold))
+  )
+)
+
+;; Modify Protocol Fee Rate
+;; Updates the fee percentage collected from rewards (capped at 100%)
+(define-public (modify-fee-rate (new-rate uint))
+  (begin
+    (asserts! (is-eq tx-sender PROTOCOL_ADMIN) ERR-UNAUTHORIZED-ACCESS)
+    (asserts! (<= new-rate u100) ERR-INVALID-INPUT)
+    (ok (var-set protocol-fee-rate new-rate))
+  )
+)
+
+;; Withdraw Protocol Fees
+;; Enables admin to withdraw accumulated protocol fees from treasury
+(define-public (withdraw-protocol-fees (withdrawal-amount uint))
+  (begin
+    (asserts! (is-eq tx-sender PROTOCOL_ADMIN) ERR-UNAUTHORIZED-ACCESS)
+    (asserts! (<= withdrawal-amount (stx-get-balance (as-contract tx-sender)))
+      ERR-INSUFFICIENT-FUNDS
+    )
+    (try! (as-contract (stx-transfer? withdrawal-amount (as-contract tx-sender) PROTOCOL_ADMIN)))
+    (ok withdrawal-amount)
+  )
+)
